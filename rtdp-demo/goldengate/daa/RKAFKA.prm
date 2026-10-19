@@ -1,0 +1,14 @@
+-- Replicat của GoldenGate for Distributed Applications and Analytics (DAA): đọc trail "ct", đẩy vào Kafka.
+-- Đặt file này vào thư mục tham số của deployment DAA ($OGG_ETC_HOME/conf/ogg/RKAFKA.prm),
+-- cùng thư mục với kafka.props và custom_kafka_producer.properties.
+
+REPLICAT RKAFKA
+
+-- Đổi đường dẫn cho đúng thư mục conf/ogg của deployment DAA
+TARGETDB LIBFILE libggjava.so SET property=<OGG_ETC_HOME>/conf/ogg/kafka.props
+
+REPORTCOUNT EVERY 1 MINUTES, RATE
+
+-- Trail của Per-PDB Extract mang tên 3 phần (FREEPDB1.CORE.TXN).
+-- Nếu trail chỉ có tên 2 phần (CORE.TXN) thì dùng: MAP CORE.*, TARGET CORE.*;
+MAP FREEPDB1.CORE.*, TARGET FREEPDB1.CORE.*;

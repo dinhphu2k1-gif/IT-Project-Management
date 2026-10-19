@@ -1,0 +1,85 @@
+# Luật cảnh báo giao dịch bất thường.
+# Ngưỡng nằm trong bảng ClickHouse rtdp.alert_config, đổi bằng scripts/set-threshold.sh
+# (có hiệu lực ngay ở lần đánh giá kế tiếp, không cần khởi động lại):
+#   withdraw_count       số lần rút tối đa cho phép trong cửa sổ thời gian
+#   withdraw_window_min  cửa sổ thời gian (phút)
+#   large_amount         ngưỡng giao dịch giá trị lớn (VND)
+# Câu SQL đã lọc theo ngưỡng; điều kiện C chỉ cần "có dòng trả về" (> 0).
+# Đánh giá mỗi 10 giây, không có thời gian chờ (for: 0s) -> báo đỏ trong vòng 1 phút (TC06).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: rtdp-fraud-rules
+    folder: RTDP
+    interval: 10s
+    rules:
+      - uid: rtdp-rapid-withdraw
+        title: Rút tiền liên tục
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: clickhouse
+            model:
+              refId: A
+              editorType: sql
+              queryType: table
+              format: 1
+              rawSql: >-
+                SELECT toString(account_id) AS account_id, count() AS so_lan_rut
+                FROM rtdp.v_txn
+                WHERE txn_type = 'WITHDRAW'
+                  AND created_at >= now64(6) - toIntervalMinute(
+                        (SELECT toUInt32(value) FROM rtdp.alert_config FINAL WHERE name = 'withdraw_window_min'))
+                GROUP BY account_id
+                HAVING so_lan_rut > (SELECT value FROM rtdp.alert_config FINAL WHERE name = 'withdraw_count')
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: high
+        annotations:
+          summary: "Tài khoản {{ $labels.account_id }} rút tiền {{ $values.A.Value }} lần liên tiếp"
+
+      - uid: rtdp-large-amount
+        title: Giao dịch giá trị lớn
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: clickhouse
+            model:
+              refId: A
+              editorType: sql
+              queryType: table
+              format: 1
+              rawSql: >-
+                SELECT toString(txn_id) AS txn_id, toString(account_id) AS account_id,
+                       toFloat64(amount) AS so_tien
+                FROM rtdp.v_txn
+                WHERE amount > (SELECT value FROM rtdp.alert_config FINAL WHERE name = 'large_amount')
+                  AND created_at >= now64(6) - INTERVAL 5 MINUTE
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: high
+        annotations:
+          summary: 'Giao dịch {{ $labels.txn_id }} của tài khoản {{ $labels.account_id }}: {{ printf "%.0f" $values.A.Value }} VND'

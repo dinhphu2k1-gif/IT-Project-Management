@@ -1,0 +1,24 @@
+# GoldenGate DAA - Kafka Handler
+# Mỗi thay đổi (insert/update/delete) là một message JSON (mode=op), topic theo tên bảng: CORE.TXN, CORE.ACCOUNT...
+# ClickHouse (clickhouse/init/01_schema.sql) đọc đúng định dạng này.
+
+gg.handlerlist=kafkahandler
+gg.handler.kafkahandler.type=kafka
+gg.handler.kafkahandler.kafkaProducerConfigFile=custom_kafka_producer.properties
+gg.handler.kafkahandler.topicMappingTemplate=${schemaName}.${tableName}
+gg.handler.kafkahandler.keyMappingTemplate=${primaryKeys}
+gg.handler.kafkahandler.mode=op
+gg.handler.kafkahandler.format=json
+gg.handler.kafkahandler.BlockingSend=false
+
+# Thư viện Kafka client + thư mục chứa custom_kafka_producer.properties.
+# Tải thư viện bằng: $OGG_HOME/opt/DependencyDownloader/kafka.sh 3.8.1
+# rồi sửa đường dẫn dưới đây cho khớp thư mục vừa tải.
+gg.classpath=<OGG_HOME>/opt/DependencyDownloader/dependencies/kafka_3.8.1/*:<OGG_ETC_HOME>/conf/ogg
+
+gg.log=log4j
+gg.log.level=INFO
+gg.report.time=30sec
+
+# Bộ nhớ JVM của Replicat (khớp phân bổ RAM trong tài liệu: heap 1 GB)
+jvm.bootoptions=-Xms512m -Xmx1g

@@ -1,0 +1,16 @@
+-- Lệnh Admin Client (GoldenGate DAA 21c/23ai Microservices) để tạo Replicat đẩy vào Kafka.
+-- Cách chạy:  $OGG_HOME/bin/adminclient  rồi gõ:  OBEY /đường/dẫn/setup-daa.oby
+-- Thay các giá trị <...> theo bản cài.
+--
+-- Trail "ct" do Extract ghi ở deployment Oracle phải đến được deployment DAA, chọn MỘT cách:
+--   (a) Tạo Distribution Path từ deployment Oracle sang Receiver Service của DAA (giao diện web
+--       Distribution Service -> Add Path, source trail "ct", target trail "ct"), rồi dùng EXTTRAIL ct.
+--   (b) Hai deployment cùng máy: trỏ thẳng đường dẫn tuyệt đối tới thư mục trail của deployment Oracle,
+--       ví dụ EXTTRAIL <DEPLOYMENT_ORACLE_HOME>/var/lib/data/ct
+
+CONNECT https://localhost:<ADMIN_PORT_DAA> DEPLOYMENT <DEPLOYMENT_DAA> AS <OGG_ADMIN_USER> PASSWORD <OGG_ADMIN_PASSWORD> !
+
+ADD REPLICAT RKAFKA, EXTTRAIL ct
+START REPLICAT RKAFKA
+
+INFO REPLICAT RKAFKA, DETAIL

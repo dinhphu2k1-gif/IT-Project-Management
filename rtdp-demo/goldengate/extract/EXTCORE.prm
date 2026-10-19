@@ -1,0 +1,22 @@
+-- Integrated Extract: bắt thay đổi schema CORE trong PDB FREEPDB1, ghi ra trail "ct".
+-- Đặt file này vào thư mục tham số của deployment GoldenGate for Oracle
+--   Microservices: $OGG_ETC_HOME/conf/ogg/EXTCORE.prm  (hoặc dán nội dung khi tạo Extract trên giao diện web)
+--   Classic:       $OGG_HOME/dirprm/extcore.prm
+
+EXTRACT EXTCORE
+
+-- Per-PDB Extract (khuyến nghị từ 21c): alias trỏ thẳng vào FREEPDB1, user ggadmin
+USERIDALIAS ggadmin_pdb DOMAIN OracleGoldenGate
+-- Nếu bản cài chỉ hỗ trợ Extract ở CDB$ROOT: dùng alias của c##ggadmin và bỏ comment dòng SOURCECATALOG
+-- USERIDALIAS ggadmin_cdb DOMAIN OracleGoldenGate
+-- SOURCECATALOG FREEPDB1
+
+EXTTRAIL ct
+
+-- Ghi đủ cột (kể cả cột không đổi) vào trail cho UPDATE/DELETE
+LOGALLSUPCOLS
+UPDATERECORDFORMAT COMPACT
+
+REPORTCOUNT EVERY 1 MINUTES, RATE
+
+TABLE CORE.*;

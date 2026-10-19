@@ -1,0 +1,23 @@
+-- Lệnh Admin Client (GoldenGate 21c/23ai Microservices) để tạo Extract.
+-- Cách chạy:  $OGG_HOME/bin/adminclient  rồi gõ:  OBEY /đường/dẫn/setup-extract.oby
+-- Thay các giá trị <...> theo bản cài. Mật khẩu ggadmin mặc định là "ggadmin" (xem .env).
+-- Có thể làm tương đương trên giao diện web Administration Service.
+
+CONNECT https://localhost:<ADMIN_PORT> DEPLOYMENT <DEPLOYMENT_ORACLE> AS <OGG_ADMIN_USER> PASSWORD <OGG_ADMIN_PASSWORD> !
+
+-- 1. Credential tới Oracle (PDB và CDB)
+ALTER CREDENTIALSTORE ADD USER ggadmin@localhost:1521/FREEPDB1 PASSWORD ggadmin ALIAS ggadmin_pdb DOMAIN OracleGoldenGate
+ALTER CREDENTIALSTORE ADD USER c##ggadmin@localhost:1521/FREE PASSWORD ggadmin ALIAS ggadmin_cdb DOMAIN OracleGoldenGate
+
+-- 2. Supplemental log mức schema (ghi đủ cột)
+DBLOGIN USERIDALIAS ggadmin_pdb DOMAIN OracleGoldenGate
+ADD SCHEMATRANDATA CORE ALLCOLS
+INFO SCHEMATRANDATA CORE
+
+-- 3. Đăng ký và tạo Integrated Extract (cần file EXTCORE.prm trong thư mục tham số)
+REGISTER EXTRACT EXTCORE DATABASE
+ADD EXTRACT EXTCORE, INTEGRATED TRANLOG, BEGIN NOW
+ADD EXTTRAIL ct, EXTRACT EXTCORE
+START EXTRACT EXTCORE
+
+INFO EXTRACT EXTCORE, DETAIL
