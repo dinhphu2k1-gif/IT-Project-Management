@@ -1,0 +1,62 @@
+name: rtdp-demo CI
+
+on:
+  push:
+    paths: ["rtdp-demo/**", ".github/workflows/rtdp-ci.yml"]
+  pull_request:
+    paths: ["rtdp-demo/**", ".github/workflows/rtdp-ci.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: rtdp-demo
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Kiểm tra tĩnh
+        run: python -m pyflakes generator scripts tests
+      - name: Unit test
+        run: python -m pytest -m "not e2e" --cov=generator --cov=scripts --cov-report=term
+
+  e2e:
+    needs: lint-and-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CORE_PASSWORD: core
+      CLICKHOUSE_USER: rtdp
+      CLICKHOUSE_PASSWORD: rtdp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Khởi động Oracle, Kafka, ClickHouse
+        run: docker compose up -d oracle kafka kafka-init clickhouse
+      - name: Chờ Oracle sẵn sàng
+        run: |
+          for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' rtdp-oracle)" = healthy ] && exit 0
+            sleep 5
+          done
+          docker logs rtdp-oracle | tail -50; exit 1
+      - name: Sinh dữ liệu và chạy bộ giả lập GoldenGate
+        run: |
+          python generator/generator.py seed
+          nohup python scripts/gg_simulator.py --interval 0.3 > simulator.log 2>&1 &
+          python generator/generator.py run --rate 5 --duration 60
+      - name: Kiểm thử end-to-end
+        run: RTDP_E2E=1 python -m pytest -m e2e -v
+      - name: Nhật ký khi lỗi
+        if: failure()
+        run: |
+          tail -50 simulator.log || true
+          docker compose logs --tail 100 clickhouse kafka

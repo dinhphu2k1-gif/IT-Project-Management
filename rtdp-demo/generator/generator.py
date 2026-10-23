@@ -105,7 +105,7 @@ def random_txn(accounts):
     account_id, branch_id, balance = acc
     channel = random.choices(CHANNELS, CHANNEL_WEIGHTS)[0]
     txn_type = random.choices(TXN_TYPES, TXN_TYPE_WEIGHTS)[0]
-    if txn_type == "WITHDRAW" and channel in ("POS", "INTERNET"):
+    if txn_type == "WITHDRAW" and channel not in ("ATM", "COUNTER"):  # rút tiền mặt chỉ tại ATM hoặc quầy
         channel = random.choice(["ATM", "COUNTER"])
     amount = money(2_000_000, 1.0, 10_000, 200_000_000)
     if txn_type not in CREDIT_TYPES and amount > float(balance):

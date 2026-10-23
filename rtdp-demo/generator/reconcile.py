@@ -35,6 +35,11 @@ def snapshot():
     return rows
 
 
+def all_match(rows):
+    """True khi mọi bảng khớp cả số dòng lẫn tổng tiền giữa Oracle và ClickHouse."""
+    return all(r[1] == r[3] and r[2] == r[4] for r in rows)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=int, default=30)
@@ -43,7 +48,7 @@ def main():
     deadline = time.time() + args.timeout
     while True:
         rows = snapshot()
-        ok = all(r[1] == r[3] and r[2] == r[4] for r in rows)
+        ok = all_match(rows)
         if ok or time.time() >= deadline:
             break
         time.sleep(1)

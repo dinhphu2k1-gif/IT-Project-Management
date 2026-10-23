@@ -123,6 +123,21 @@ Phương án dự phòng: quay sẵn video demo hoàn chỉnh.
 Kết quả chạy thử (không có GoldenGate, dùng `gg_simulator.py`): TC01 khoảng 0,6–1,3 giây; TC02–TC06 đạt.
 Lúc đó Oracle dùng 2,35 GB, ClickHouse 0,42 GB, Kafka 0,41 GB, Grafana 85 MB.
 
+### Kiểm thử tự động
+
+```bash
+pip install -r requirements-dev.txt
+python -m pyflakes generator scripts tests
+python -m pytest -m "not e2e"                 # unit test, không cần CSDL
+RTDP_E2E=1 python -m pytest -m e2e            # end-to-end, cần hệ thống đang chạy và có luồng CDC
+```
+
+CI trên GitHub Actions (`.github/workflows/rtdp-ci.yml`) chạy kiểm tra tĩnh, unit test, rồi dựng Oracle,
+Kafka và ClickHouse bằng Docker Compose để chạy kiểm thử end-to-end với bộ giả lập GoldenGate.
+
+Khi chạy trên máy có GoldenGate thật, cần kiểm chứng thêm các ca TC-GG01–TC-GG05: Extract bắt thay đổi,
+độ trễ p95 qua GoldenGate, UPDATE/DELETE, đối soát, và tự phục hồi khi Kafka khởi động lại.
+
 ## 7. Ngưỡng cảnh báo
 
 Ngưỡng nằm trong bảng ClickHouse `rtdp.alert_config` và có hiệu lực ở lần đánh giá kế tiếp (10 giây):
