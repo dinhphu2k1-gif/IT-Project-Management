@@ -1,7 +1,7 @@
 -- ClickHouse: nạp CDC từ Kafka (định dạng JSON của GoldenGate Kafka Handler, mode=op).
 -- Message mẫu:
---   {"table":"FREEPDB1.CORE.TXN","op_type":"I","op_ts":"2026-10-17 03:00:00.000000",
---    "current_ts":"2026-10-17T03:00:01.120000","pos":"00000000000000001234",
+--   {"table":"CORE.TXN","op_type":"I","op_ts":"2026-10-17 03:00:00.000000",
+--    "current_ts":"2026-10-17 03:00:01.120000","pos":"00000000000000001234",
 --    "after":{"TXN_ID":1,"ACCOUNT_ID":1001,...}}
 -- Insert/Update lấy dữ liệu ở "after"; Delete lấy ở "before".
 -- Bảng đích dùng ReplacingMergeTree(version, is_deleted): bản ghi mới nhất theo khoá chính thắng,

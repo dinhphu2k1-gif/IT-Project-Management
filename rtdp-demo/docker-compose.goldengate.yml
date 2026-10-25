@@ -1,0 +1,75 @@
+# GoldenGate thật cho demo RTDP (thay cho scripts/gg_simulator.py).
+# Dùng kèm file chính:   docker compose -f docker-compose.yml -f docker-compose.goldengate.yml up -d
+# Bộ cài zip nằm ngoài repo, đường dẫn đặt bằng OGG_INSTALLER_DIR trong .env.
+#
+#   ogg-oracle  Integrated Extract EXTCORE (đọc redo log Oracle) -> trail ct
+#   ogg-daa     Replicat RKAFKA (đọc trail ct) -> Kafka (kafka:29092)
+# Trail dùng chung qua volume ogg-trail (đúng phương án (b) trong goldengate/daa/setup-daa.oby).
+
+x-ogg-build: &ogg-build
+  context: ./goldengate/docker
+  additional_contexts:
+    installer: ${OGG_INSTALLER_DIR:-${HOME}/Documents/goldengate}
+
+services:
+  ogg-oracle:
+    build:
+      <<: *ogg-build
+      target: ora
+    image: rtdp-ogg-oracle
+    container_name: rtdp-ogg-oracle
+    hostname: ogg-oracle
+    environment:
+      DEPLOY_NAME: ORA_DEPLOY
+      PORT_BASE: 9011
+      OGG_DATA_HOME: /u01/app/oracle/trail   # Extract ghi trail ra volume dùng chung
+      TNS_ADMIN_DIR: /u01/app/oracle/network/admin
+      OGG_SCHEMA: ggadmin
+      ENV_LD_LIBRARY_PATH: /u01/app/oracle/product/ogg/lib/instantclient:/u01/app/oracle/product/ogg/lib
+      OGG_ADMIN_USER: ${OGG_ADMIN_USER:-oggadmin}
+      OGG_ADMIN_PASSWORD: ${OGG_ADMIN_PASSWORD:-Oggadmin_123}
+    ports:
+      - "9011-9015:9011-9015"
+    volumes:
+      - ogg-oracle-sm:/u01/app/oracle/ggsm
+      - ogg-oracle-dep:/u01/app/oracle/deployments
+      - ogg-trail:/u01/app/oracle/trail
+      - ./goldengate:/home/oracle/rtdp-gg:ro
+    mem_limit: 1536m
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ogg-daa:
+    build:
+      <<: *ogg-build
+      target: daa
+    image: rtdp-ogg-daa
+    container_name: rtdp-ogg-daa
+    hostname: ogg-daa
+    environment:
+      DEPLOY_NAME: DAA_DEPLOY
+      PORT_BASE: 9021
+      OGG_ADMIN_USER: ${OGG_ADMIN_USER:-oggadmin}
+      OGG_ADMIN_PASSWORD: ${OGG_ADMIN_PASSWORD:-Oggadmin_123}
+      ENV_LD_LIBRARY_PATH: /u01/app/oracle/product/ogg/lib:/usr/lib/jvm/jre-11/lib/server
+    ports:
+      - "9021-9025:9021-9025"
+    volumes:
+      - ogg-daa-sm:/u01/app/oracle/ggsm
+      - ogg-daa-dep:/u01/app/oracle/deployments
+      - ogg-trail:/u01/app/oracle/trail
+      - ./goldengate:/home/oracle/rtdp-gg:ro
+    mem_limit: 1536m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ogg-oracle-sm:
+  ogg-oracle-dep:
+  ogg-daa-sm:
+  ogg-daa-dep:
+  ogg-trail:

@@ -8,8 +8,8 @@ Một giao dịch ghi vào core banking (Oracle) xuất hiện trên dashboard G
                    ARCHIVELOG                                    JSON, mode=op     topic     + MV           + cảnh báo
 ```
 
-Oracle, Kafka, ClickHouse và Grafana chạy bằng Docker Compose. GoldenGate dùng bản cài sẵn của bạn,
-cấu hình mẫu ở thư mục `goldengate/`.
+Oracle, Kafka, ClickHouse và Grafana chạy bằng Docker Compose. GoldenGate chạy bằng hai container build từ
+bộ cài của bạn (mục 3.0), hoặc dùng bản cài sẵn với cấu hình mẫu ở thư mục `goldengate/` (mục 3.1, 3.2).
 
 ![Dashboard RTDP](docs/dashboard.png)
 
@@ -41,8 +41,96 @@ Khi Oracle khởi tạo lần đầu, script trong `oracle/setup/` tự chạy:
 | Kafka | `localhost:9092` (từ máy host), `kafka:29092` (trong mạng docker) | — |
 | ClickHouse | http://localhost:8123, native `localhost:9000` | `rtdp/rtdp` |
 | Grafana | http://localhost:3000 | `admin/admin` (người xem ẩn danh được xem dashboard) |
+| GoldenGate for Oracle (Service Manager) | http://localhost:9011 (Admin Service: 9012) | `oggadmin/Oggadmin_123` (đổi trong `.env`) |
+| GoldenGate DAA (Service Manager) | http://localhost:9021 (Admin Service: 9022) | như trên |
+
+### Truy cập từng thành phần
+
+Chạy trong thư mục `rtdp-demo`. Nếu đã đổi mật khẩu trong `.env` thì thay giá trị tương ứng.
+
+**Grafana**: mở http://localhost:3000/d/rtdp-realtime. Đăng nhập `admin/admin` để sửa dashboard và xem luật cảnh báo (Alerting → Alert rules).
+
+**Oracle**: dùng `sqlplus` có sẵn trong container.
+
+```bash
+docker exec -it rtdp-oracle sqlplus core/core@localhost:1521/FREEPDB1      # dữ liệu core banking (schema CORE)
+docker exec -it rtdp-oracle sqlplus ggadmin/ggadmin@localhost:1521/FREEPDB1 # user của GoldenGate
+docker exec -it rtdp-oracle sqlplus / as sysdba                             # quản trị (gõ ALTER SESSION SET CONTAINER = FREEPDB1;)
+```
+
+Từ máy host có thể dùng client bất kỳ với `localhost:1521/FREEPDB1` (SQL Developer, DBeaver…).
+
+**Kafka**: xem topic và đọc message.
+
+```bash
+docker exec rtdp-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+docker exec rtdp-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:29092 \
+  --topic CORE.TXN --partition 0 --offset latest --max-messages 1     # message mới nhất, định dạng như mục 3.2
+```
+
+**ClickHouse**: bảng `rtdp.*`, nên đọc qua các view `v_*` (đã áp dụng update/delete).
+
+```bash
+docker exec -it rtdp-clickhouse clickhouse-client --user rtdp --password rtdp
+curl -s -u rtdp:rtdp 'http://localhost:8123/?query=SELECT+count()+FROM+rtdp.v_txn'      # qua HTTP
+```
+
+**GoldenGate** (mục 3.0). Có ba cách:
+
+1. *Giao diện web*: http://localhost:9011 (Oracle) và http://localhost:9021 (DAA), tài khoản `oggadmin`.
+   Vào Service Manager, chọn Administration Service để xem Extract `EXTCORE` và Replicat `RKAFKA`: trạng thái, độ trễ,
+   thống kê, tham số, báo cáo.
+2. *Dòng lệnh `adminclient`* trong container:
+
+   ```bash
+   docker exec -it rtdp-ogg-oracle adminclient
+   OGG> CONNECT http://ogg-oracle:9011 DEPLOYMENT ORA_DEPLOY AS oggadmin PASSWORD Oggadmin_123
+   OGG> INFO EXTRACT EXTCORE, DETAIL
+   OGG> STATS EXTRACT EXTCORE, TOTAL
+
+   docker exec -it rtdp-ogg-daa adminclient
+   OGG> CONNECT http://ogg-daa:9021 DEPLOYMENT DAA_DEPLOY AS oggadmin PASSWORD Oggadmin_123
+   OGG> INFO REPLICAT RKAFKA, DETAIL
+   OGG> STATS REPLICAT RKAFKA, TOTAL
+   ```
+
+3. *REST API* (cổng 9012 cho Extract, 9022 cho Replicat):
+
+   ```bash
+   curl -s -u oggadmin:Oggadmin_123 http://localhost:9012/services/v2/extracts/EXTCORE
+   curl -s -u oggadmin:Oggadmin_123 http://localhost:9022/services/v2/replicats/RKAFKA
+   ```
+
+Nhật ký GoldenGate:
+
+```bash
+docker exec rtdp-ogg-oracle tail -50 /u01/app/oracle/deployments/ORA_DEPLOY/var/log/ggserr.log
+docker exec rtdp-ogg-daa    tail -50 /u01/app/oracle/deployments/DAA_DEPLOY/var/log/ggserr.log
+docker exec rtdp-ogg-daa    ls /u01/app/oracle/deployments/DAA_DEPLOY/var/lib/report/   # báo cáo RKAFKA.rpt
+```
 
 ## 3. Cấu hình GoldenGate
+
+**3.0. Chạy bằng Docker (khuyến nghị)**
+
+Cần hai bộ cài Oracle (tải từ Oracle, không nằm trong repo), đặt chung một thư mục, mặc định `~/Documents/goldengate`
+(đổi bằng `OGG_INSTALLER_DIR` trong `.env`):
+
+- `V1054774-01.zip`: GoldenGate 26ai for Oracle (Microservices), chạy Extract;
+- `V1054834-01.zip`: GoldenGate for Big Data (DAA), chạy Replicat Kafka.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.goldengate.yml up -d --build   # lần đầu build image ~10 phút
+scripts/setup-goldengate.sh        # tạo Extract EXTCORE, Replicat RKAFKA, bật Auto Restart (chạy lại được)
+```
+
+Hai container `rtdp-ogg-oracle` và `rtdp-ogg-daa` dùng chung volume trail `ogg-trail`. Giao diện web ở cổng 9011 và 9021.
+Nếu đang chạy `scripts/gg_simulator.py` thì tắt đi, để mỗi topic chỉ có một nguồn.
+Mỗi container cần khoảng 1–1,5 GB RAM, nên máy 16 GB sẽ khá chật khi chạy cùng stack chính.
+
+Sau khi xoá volume GoldenGate (`down -v`), `setup-goldengate.sh` tự gỡ đăng ký Extract cũ còn sót trong Oracle.
+
+Các mục 3.1 và 3.2 dưới đây dành cho trường hợp dùng bản GoldenGate cài sẵn, không dùng Docker.
 
 Các file đều có chỗ `<...>` cần thay theo bản cài (cổng, tên deployment, đường dẫn).
 
@@ -67,9 +155,13 @@ Các file đều có chỗ `<...>` cần thay theo bản cài (cổng, tên depl
 Định dạng message mà ClickHouse chờ đọc (Kafka Handler mặc định, `format=json`, `mode=op`):
 
 ```json
-{"table":"FREEPDB1.CORE.TXN","op_type":"I","op_ts":"2026-10-17 03:00:00.123456","current_ts":"...","pos":"...",
- "after":{"TXN_ID":1,"ACCOUNT_ID":1000001,"AMOUNT":2500000,"CREATED_AT":"2026-10-17 03:00:00.120000", ...}}
+{"table":"CORE.TXN","op_type":"I","op_ts":"2026-10-17 03:00:00.000000","current_ts":"2026-10-17 03:00:01.215000","pos":"00000000000000238653",
+ "after":{"TXN_ID":1,"ACCOUNT_ID":1000001,"AMOUNT":2500000.00,"CREATED_AT":"2026-10-17 03:00:00.120000000", ...}}
 ```
+
+GoldenGate 26ai mặc định chỉ xuất `before`/`after`. Thông tin `table`, `op_type`, `pos`... có được nhờ dòng
+`format.metaColumnsTemplate` trong `kafka.props`. Thiếu dòng này thì ClickHouse không nhận ra lệnh DELETE.
+Trail của Per-PDB Extract mang tên 2 phần (`CORE.TXN`), nên `RKAFKA.prm` dùng `MAP CORE.*, TARGET CORE.*`.
 
 > **Chưa có GoldenGate mà muốn thử phần sau Kafka?** Dùng script giả lập (chỉ để thử, demo thật thì tắt đi):
 > `pip install confluent-kafka && python scripts/gg_simulator.py`. Script đọc Oracle định kỳ và gửi message
@@ -135,7 +227,9 @@ RTDP_E2E=1 python -m pytest -m e2e            # end-to-end, cần hệ thống �
 CI trên GitHub Actions (`.github/workflows/rtdp-ci.yml`) chạy kiểm tra tĩnh, unit test, rồi dựng Oracle,
 Kafka và ClickHouse bằng Docker Compose để chạy kiểm thử end-to-end với bộ giả lập GoldenGate.
 
-Khi chạy trên máy có GoldenGate thật, cần kiểm chứng thêm các ca TC-GG01–TC-GG05: Extract bắt thay đổi,
+Với GoldenGate thật (container ở mục 3.0), TC01–TC06 đã chạy đạt: TC01 khoảng 4–5 giây (cao hơn bộ giả lập vì
+Integrated Extract), TC03 nhận message `D` thật, TC05 Replicat không bị lỗi khi Kafka tắt rồi tự gửi tiếp. TC07 chưa chạy.
+Khi chạy trên máy có GoldenGate cài sẵn, cần kiểm chứng thêm các ca TC-GG01–TC-GG05: Extract bắt thay đổi,
 độ trễ p95 qua GoldenGate, UPDATE/DELETE, đối soát, và tự phục hồi khi Kafka khởi động lại.
 
 ## 7. Ngưỡng cảnh báo
@@ -181,7 +275,8 @@ docker compose down        # xoá container, giữ volume dữ liệu
 docker compose down -v     # xoá cả dữ liệu (Oracle khởi tạo lại từ đầu lần sau)
 ```
 
-Sau `down -v`, hãy xoá và tạo lại Extract/Replicat, vì checkpoint GoldenGate còn trỏ vào database cũ.
+Sau `down -v`, hãy xoá và tạo lại Extract/Replicat, vì checkpoint GoldenGate còn trỏ vào database cũ
+(với container GoldenGate: `scripts/setup-goldengate.sh`).
 
 ## Khác biệt so với tài liệu triển khai ban đầu
 

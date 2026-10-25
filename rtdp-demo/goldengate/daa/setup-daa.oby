@@ -10,6 +10,8 @@
 
 CONNECT https://localhost:<ADMIN_PORT_DAA> DEPLOYMENT <DEPLOYMENT_DAA> AS <OGG_ADMIN_USER> PASSWORD <OGG_ADMIN_PASSWORD> !
 
+-- Với trail dùng chung qua volume (docker-compose.goldengate.yml) dùng đường dẫn tuyệt đối:
+--   ADD REPLICAT RKAFKA, EXTTRAIL /u01/app/oracle/trail/ct
 ADD REPLICAT RKAFKA, EXTTRAIL ct
 START REPLICAT RKAFKA
 

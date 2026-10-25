@@ -10,6 +10,8 @@ gg.handler.kafkahandler.keyMappingTemplate=${primaryKeys}
 gg.handler.kafkahandler.mode=op
 gg.handler.kafkahandler.format=json
 gg.handler.kafkahandler.BlockingSend=false
+# GoldenGate 26ai mặc định chỉ xuất before/after. ClickHouse cần thêm table, op_type, op_ts, current_ts, pos:
+gg.handler.kafkahandler.format.metaColumnsTemplate=${objectname[table]},${optype[op_type]},${timestamp[op_ts]},${currenttimestamp[current_ts]},${position[pos]}
 
 # Thư viện Kafka client + thư mục chứa custom_kafka_producer.properties.
 # Tải thư viện bằng: $OGG_HOME/opt/DependencyDownloader/kafka.sh 3.8.1

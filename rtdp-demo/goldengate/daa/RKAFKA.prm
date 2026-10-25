@@ -9,6 +9,6 @@ TARGETDB LIBFILE libggjava.so SET property=<OGG_ETC_HOME>/conf/ogg/kafka.props
 
 REPORTCOUNT EVERY 1 MINUTES, RATE
 
--- Trail của Per-PDB Extract mang tên 3 phần (FREEPDB1.CORE.TXN).
--- Nếu trail chỉ có tên 2 phần (CORE.TXN) thì dùng: MAP CORE.*, TARGET CORE.*;
-MAP FREEPDB1.CORE.*, TARGET FREEPDB1.CORE.*;
+-- Trail của Per-PDB Extract (GoldenGate 26ai) mang tên 2 phần (CORE.TXN), không có tên PDB.
+-- Nếu trail của bạn mang tên 3 phần (FREEPDB1.CORE.TXN) thì đổi thành: MAP FREEPDB1.CORE.*, TARGET FREEPDB1.CORE.*;
+MAP CORE.*, TARGET CORE.*;

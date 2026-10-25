@@ -14,10 +14,11 @@ DBLOGIN USERIDALIAS ggadmin_pdb DOMAIN OracleGoldenGate
 ADD SCHEMATRANDATA CORE ALLCOLS
 INFO SCHEMATRANDATA CORE
 
--- 3. Đăng ký và tạo Integrated Extract (cần file EXTCORE.prm trong thư mục tham số)
-REGISTER EXTRACT EXTCORE DATABASE
+-- 3. Tạo, đăng ký và chạy Integrated Extract (cần file EXTCORE.prm trong thư mục tham số).
+--    Thứ tự quan trọng: ADD EXTRACT trước, REGISTER sau. REGISTER cần Extract đã tồn tại.
 ADD EXTRACT EXTCORE, INTEGRATED TRANLOG, BEGIN NOW
 ADD EXTTRAIL ct, EXTRACT EXTCORE
+REGISTER EXTRACT EXTCORE DATABASE
 START EXTRACT EXTCORE
 
 INFO EXTRACT EXTCORE, DETAIL
